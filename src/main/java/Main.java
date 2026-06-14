@@ -11,8 +11,13 @@ public class Main {
                 break;
             }
             
-            String input = scanner.nextLine();
-            System.out.println(input + ": command not found");
+            String input = scanner.nextLine().trim();
+            
+            if (input.equals("exit 0")) {
+                System.exit(0);
+            } else {
+                System.out.println(input + ": command not found");
+            }
         }
     }
 }
