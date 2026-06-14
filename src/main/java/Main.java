@@ -13,7 +13,7 @@ public class Main {
             
             String input = scanner.nextLine().trim();
             
-            if (input.equals("exit 0")) {
+            if (input.equals("exit") || input.startsWith("exit ")) {
                 System.exit(0);
             } else {
                 System.out.println(input + ": command not found");
