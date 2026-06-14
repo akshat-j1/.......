@@ -2,11 +2,11 @@ import java.util.Scanner;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        // Print the prompt with a trailing space, using print instead of println
+        // Print the prompt with a trailing space
         System.out.print("$ ");
 
-        // Wait for user input so the program doesn't exit immediately
-        Scanner scanner = new Scanner(System.util.in);
+        // Fixed: Changed System.util.in to System.in
+        Scanner scanner = new Scanner(System.in);
         scanner.nextLine();
     }
 }
