@@ -1,6 +1,5 @@
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
@@ -47,10 +46,13 @@ public class Main {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
                     List<String> commandList = new ArrayList<>();
-                    commandList.add(executablePath);
-                    commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
+                    // Execute using a subshell to perfectly isolate the executable's original name inside its argv[0] context
+                    commandList.add("sh");
+                    commandList.add("-c");
+                    
+                    // Re-assemble the exact input execution line
+                    commandList.add(executablePath + input.substring(command.length()));
 
-                    // Start process and inherit system I/O streams
                     ProcessBuilder pb = new ProcessBuilder(commandList);
                     pb.inheritIO();
                     Process process = pb.start();
