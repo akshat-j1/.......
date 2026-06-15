@@ -1,4 +1,7 @@
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -13,15 +16,23 @@ public class Main {
             }
             
             String input = scanner.nextLine().trim();
-            
-            if (input.equals("exit") || input.startsWith("exit ")) {
+            if (input.isEmpty()) {
+                continue;
+            }
+
+            String[] parts = input.split("\\s+");
+            String command = parts[0];
+
+            if (command.equals("exit")) {
                 System.exit(0);
-            } else if (input.startsWith("echo ")) {
+            } else if (command.equals("echo")) {
                 String content = input.substring(5);
                 System.out.println(content);
-            } else if (input.startsWith("type ")) {
-                String arg = input.substring(5).trim();
-                
+            } else if (command.equals("type")) {
+                if (parts.length < 2) {
+                    continue;
+                }
+                String arg = parts[1];
                 if (arg.equals("echo") || arg.equals("exit") || arg.equals("type")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
@@ -33,7 +44,20 @@ public class Main {
                     }
                 }
             } else {
-                System.out.println(input + ": command not found");
+                String executablePath = getPath(command);
+                if (executablePath != null) {
+                    List<String> commandList = new ArrayList<>();
+                    commandList.add(executablePath);
+                    commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
+
+                    // Start process and inherit system I/O streams
+                    ProcessBuilder pb = new ProcessBuilder(commandList);
+                    pb.inheritIO();
+                    Process process = pb.start();
+                    process.waitFor();
+                } else {
+                    System.out.println(input + ": command not found");
+                }
             }
         }
     }
