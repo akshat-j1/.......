@@ -47,21 +47,13 @@ public class Main {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
                     List<String> commandList = new ArrayList<>();
-                    commandList.add(executablePath);
+                    commandList.add(command);
                     commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
 
                     ProcessBuilder pb = new ProcessBuilder(commandList);
                     
-                    List<String> pbArgs = pb.command();
-                    pbArgs.set(0, command);
-                    
                     File exeFile = new File(executablePath);
-                    File dir = exeFile.getParentFile();
-                    pb.directory(dir);
-                    
-                    if (dir != null) {
-                        pbArgs.set(0, "./" + command);
-                    }
+                    pb.directory(exeFile.getParentFile());
 
                     pb.inheritIO();
                     Process process = pb.start();
