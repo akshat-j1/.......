@@ -35,9 +35,11 @@ public class Main {
                     continue;
                 }
                 String targetDir = parts[1];
-                Path path = Paths.get(targetDir);
-                if (Files.exists(path) && Files.isDirectory(path)) {
-                    System.setProperty("user.dir", path.toAbsolutePath().normalize().toString());
+                Path currentPath = Paths.get(System.getProperty("user.dir"));
+                Path targetPath = currentPath.resolve(targetDir).normalize();
+
+                if (Files.exists(targetPath) && Files.isDirectory(targetPath)) {
+                    System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
                 } else {
                     System.out.println("cd: " + targetDir + ": No such file or directory");
                 }
