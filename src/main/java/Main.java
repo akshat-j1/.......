@@ -76,18 +76,10 @@ public class Main {
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    List<String> execArgs = new ArrayList<>();
-                    execArgs.add("sh");
-                    execArgs.add("-c");
+                    // Fix: Pass the bare unquoted parts natively to ProcessBuilder
+                    ProcessBuilder pb = new ProcessBuilder(parts);
                     
-                    StringBuilder commandLine = new StringBuilder();
-                    commandLine.append("'").append(executablePath.replace("'", "'\\''")).append("'");
-                    for (int i = 1; i < parts.size(); i++) {
-                        commandLine.append(" '").append(parts.get(i).replace("'", "'\\''")).append("'");
-                    }
-                    execArgs.add(commandLine.toString());
-
-                    ProcessBuilder pb = new ProcessBuilder(execArgs);
+                    // Explicitly point execution directory to isolate execution resolution contexts
                     pb.directory(new File(System.getProperty("user.dir")));
                     pb.inheritIO();
                     Process process = pb.start();
