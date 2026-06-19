@@ -35,8 +35,15 @@ public class Main {
                     continue;
                 }
                 String targetDir = parts[1];
-                Path currentPath = Paths.get(System.getProperty("user.dir"));
-                Path targetPath = currentPath.resolve(targetDir).normalize();
+                Path targetPath;
+
+                if (targetDir.equals("~")) {
+                    String homeEnv = System.getenv("HOME");
+                    targetPath = Paths.get(homeEnv);
+                } else {
+                    Path currentPath = Paths.get(System.getProperty("user.dir"));
+                    targetPath = currentPath.resolve(targetDir).normalize();
+                }
 
                 if (Files.exists(targetPath) && Files.isDirectory(targetPath)) {
                     System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
