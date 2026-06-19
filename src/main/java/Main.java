@@ -98,7 +98,12 @@ public class Main {
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
 
-            if (c == '\'' && !inDoubleQuotes) {
+            if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
+                if (i + 1 < input.length()) {
+                    currentArg.append(input.charAt(++i));
+                    hasContent = true;
+                }
+            } else if (c == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
                 hasContent = true;
             } else if (c == '"' && !inSingleQuotes) {
