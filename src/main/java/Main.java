@@ -76,9 +76,18 @@ public class Main {
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    // Swap out the unquoted command string with its resolved absolute file path
-                    parts.set(0, executablePath);
-                    ProcessBuilder pb = new ProcessBuilder(parts);
+                    List<String> execArgs = new ArrayList<>();
+                    execArgs.add("sh");
+                    execArgs.add("-c");
+                    
+                    StringBuilder commandLine = new StringBuilder();
+                    commandLine.append("'").append(executablePath.replace("'", "'\\''")).append("'");
+                    for (int i = 1; i < parts.size(); i++) {
+                        commandLine.append(" '").append(parts.get(i).replace("'", "'\\''")).append("'");
+                    }
+                    execArgs.add(commandLine.toString());
+
+                    ProcessBuilder pb = new ProcessBuilder(execArgs);
                     pb.directory(new File(System.getProperty("user.dir")));
                     pb.inheritIO();
                     Process process = pb.start();
