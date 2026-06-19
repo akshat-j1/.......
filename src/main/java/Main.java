@@ -1,4 +1,6 @@
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -45,13 +47,18 @@ public class Main {
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    String[] execArgs = new String[parts.length];
-                    execArgs[0] = executablePath;
-                    System.arraycopy(parts, 1, execArgs, 1, parts.length - 1);
+                    // Fix: Reassemble command line args cleanly using a shell context to force clean argv[0] values
+                    List<String> commandList = new ArrayList<>();
+                    commandList.add("sh");
+                    commandList.add("-c");
+                    
+                    // Concat the full resolved absolute path followed by the remaining user arguments
+                    String argumentsStr = input.substring(command.length());
+                    commandList.add(executablePath + argumentsStr);
 
-                    Process process = Runtime.getRuntime().exec(execArgs);
-                    process.getInputStream().transferTo(System.out);
-                    process.getErrorStream().transferTo(System.err);
+                    ProcessBuilder pb = new ProcessBuilder(commandList);
+                    pb.inheritIO();
+                    Process process = pb.start();
                     process.waitFor();
                 } else {
                     System.out.println(input + ": command not found");
