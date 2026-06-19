@@ -98,10 +98,26 @@ public class Main {
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
 
-            if (c == '\\' && !inSingleQuotes && !inDoubleQuotes) {
-                if (i + 1 < input.length()) {
-                    currentArg.append(input.charAt(++i));
-                    hasContent = true;
+            if (c == '\\' && !inSingleQuotes) {
+                if (inDoubleQuotes) {
+                    if (i + 1 < input.length()) {
+                        char nextChar = input.charAt(i + 1);
+                        if (nextChar == '"' || nextChar == '\\' || nextChar == '$' || nextChar == '`') {
+                            currentArg.append(nextChar);
+                            i++;
+                        } else {
+                            currentArg.append(c);
+                        }
+                        hasContent = true;
+                    } else {
+                        currentArg.append(c);
+                        hasContent = true;
+                    }
+                } else {
+                    if (i + 1 < input.length()) {
+                        currentArg.append(input.charAt(++i));
+                        hasContent = true;
+                    }
                 }
             } else if (c == '\'' && !inDoubleQuotes) {
                 inSingleQuotes = !inSingleQuotes;
