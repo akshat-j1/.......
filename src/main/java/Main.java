@@ -1,4 +1,7 @@
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Scanner;
 
 public class Main {
@@ -27,12 +30,23 @@ public class Main {
                 System.out.println(content);
             } else if (command.equals("pwd")) {
                 System.out.println(System.getProperty("user.dir"));
+            } else if (command.equals("cd")) {
+                if (parts.length < 2) {
+                    continue;
+                }
+                String targetDir = parts[1];
+                Path path = Paths.get(targetDir);
+                if (Files.exists(path) && Files.isDirectory(path)) {
+                    System.setProperty("user.dir", path.toAbsolutePath().normalize().toString());
+                } else {
+                    System.out.println("cd: " + targetDir + ": No such file or directory");
+                }
             } else if (command.equals("type")) {
                 if (parts.length < 2) {
                     continue;
                 }
                 String arg = parts[1];
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd")) {
+                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
                     String executablePath = getPath(arg);
@@ -43,12 +57,10 @@ public class Main {
                     }
                 }
             } else {
-                // If it's not a builtin, check if it exists in the PATH environment
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    // Pass the raw parts directly. The OS handles PATH lookups 
-                    // and preserves the naked command name as Arg #0 perfectly.
                     ProcessBuilder pb = new ProcessBuilder(parts);
+                    pb.directory(new File(System.getProperty("user.dir")));
                     pb.inheritIO();
                     Process process = pb.start();
                     process.waitFor();
