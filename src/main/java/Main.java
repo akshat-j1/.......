@@ -76,13 +76,15 @@ public class Main {
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
+                    // Swap out the unquoted command string with its resolved absolute file path
+                    parts.set(0, executablePath);
                     ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.directory(new File(System.getProperty("user.dir")));
                     pb.inheritIO();
                     Process process = pb.start();
                     process.waitFor();
                 } else {
-                    System.out.println(input + ": command not found");
+                    System.out.println(command + ": command not found");
                 }
             }
         }
