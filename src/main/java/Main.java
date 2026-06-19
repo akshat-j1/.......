@@ -1,7 +1,4 @@
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -28,12 +25,14 @@ public class Main {
             } else if (command.equals("echo")) {
                 String content = input.substring(5);
                 System.out.println(content);
+            } else if (command.equals("pwd")) {
+                System.out.println(System.getProperty("user.dir"));
             } else if (command.equals("type")) {
                 if (parts.length < 2) {
                     continue;
                 }
                 String arg = parts[1];
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type")) {
+                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
                     String executablePath = getPath(arg);
@@ -46,17 +45,13 @@ public class Main {
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    List<String> commandList = new ArrayList<>();
-                    commandList.add(command);
-                    commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
+                    String[] execArgs = new String[parts.length];
+                    execArgs[0] = executablePath;
+                    System.arraycopy(parts, 1, execArgs, 1, parts.length - 1);
 
-                    ProcessBuilder pb = new ProcessBuilder(commandList);
-                    
-                    File exeFile = new File(executablePath);
-                    pb.directory(exeFile.getParentFile());
-
-                    pb.inheritIO();
-                    Process process = pb.start();
+                    Process process = Runtime.getRuntime().exec(execArgs);
+                    process.getInputStream().transferTo(System.out);
+                    process.getErrorStream().transferTo(System.err);
                     process.waitFor();
                 } else {
                     System.out.println(input + ": command not found");
