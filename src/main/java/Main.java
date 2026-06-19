@@ -1,7 +1,6 @@
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -20,41 +19,50 @@ public class Main {
                 continue;
             }
 
-            String[] parts = input.split("\\s+");
-            String command = parts[0];
+            List<String> parts = parseArguments(input);
+            if (parts.isEmpty()) {
+                continue;
+            }
+            
+            String command = parts.get(0);
 
             if (command.equals("exit")) {
                 System.exit(0);
             } else if (command.equals("echo")) {
-                String content = input.substring(5);
-                System.out.println(content);
+                StringBuilder sb = new StringBuilder();
+                for (int i = 1; i < parts.size(); i++) {
+                    sb.append(parts.get(i));
+                    if (i < parts.size() - 1) {
+                        sb.append(" ");
+                    }
+                }
+                System.out.println(sb.toString());
             } else if (command.equals("pwd")) {
                 System.out.println(System.getProperty("user.dir"));
             } else if (command.equals("cd")) {
-                if (parts.length < 2) {
+                if (parts.size() < 2) {
                     continue;
                 }
-                String targetDir = parts[1];
-                Path targetPath;
+                String targetDir = parts.get(1);
+                java.nio.file.Path targetPath;
 
                 if (targetDir.equals("~")) {
-                    String homeEnv = System.getenv("HOME");
-                    targetPath = Paths.get(homeEnv);
+                    targetPath = java.nio.file.Paths.get(System.getenv("HOME"));
                 } else {
-                    Path currentPath = Paths.get(System.getProperty("user.dir"));
+                    java.nio.file.Path currentPath = java.nio.file.Paths.get(System.getProperty("user.dir"));
                     targetPath = currentPath.resolve(targetDir).normalize();
                 }
 
-                if (Files.exists(targetPath) && Files.isDirectory(targetPath)) {
+                if (java.nio.file.Files.exists(targetPath) && java.nio.file.Files.isDirectory(targetPath)) {
                     System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
                 } else {
                     System.out.println("cd: " + targetDir + ": No such file or directory");
                 }
             } else if (command.equals("type")) {
-                if (parts.length < 2) {
+                if (parts.size() < 2) {
                     continue;
                 }
-                String arg = parts[1];
+                String arg = parts.get(1);
                 if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
                     System.out.println(arg + " is a shell builtin");
                 } else {
@@ -78,6 +86,36 @@ public class Main {
                 }
             }
         }
+    }
+
+    private static List<String> parseArguments(String input) {
+        List<String> args = new ArrayList<>();
+        StringBuilder currentArg = new StringBuilder();
+        boolean inSingleQuotes = false;
+        boolean hasContent = false;
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+
+            if (c == '\'') {
+                inSingleQuotes = !inSingleQuotes;
+                hasContent = true;
+            } else if (Character.isWhitespace(c) && !inSingleQuotes) {
+                if (currentArg.length() > 0 || hasContent) {
+                    args.add(currentArg.toString());
+                    currentArg.setLength(0);
+                    hasContent = false;
+                }
+            } else {
+                currentArg.append(c);
+            }
+        }
+
+        if (currentArg.length() > 0 || hasContent) {
+            args.add(currentArg.toString());
+        }
+
+        return args;
     }
 
     private static String getPath(String command) {
