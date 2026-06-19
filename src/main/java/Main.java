@@ -1,7 +1,4 @@
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -46,16 +43,12 @@ public class Main {
                     }
                 }
             } else {
-                File exeFile = getFile(command);
-                if (exeFile != null) {
-                    List<String> commandList = new ArrayList<>();
-                    // Fix: Running via a localized relative name forces Arg #0 to drop the absolute path prefix
-                    commandList.add("/" + command);
-                    commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
-
-                    ProcessBuilder pb = new ProcessBuilder(commandList);
-                    // Switch the process running context to the directory where the target file lives
-                    pb.directory(exeFile.getParentFile());
+                // If it's not a builtin, check if it exists in the PATH environment
+                String executablePath = getPath(command);
+                if (executablePath != null) {
+                    // Pass the raw parts directly. The OS handles PATH lookups 
+                    // and preserves the naked command name as Arg #0 perfectly.
+                    ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.inheritIO();
                     Process process = pb.start();
                     process.waitFor();
@@ -66,23 +59,19 @@ public class Main {
         }
     }
 
-    private static File getFile(String command) {
+    private static String getPath(String command) {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null || pathEnv.isEmpty()) {
             return null;
         }
+
         String[] directories = pathEnv.split(File.pathSeparator);
         for (String directory : directories) {
             File file = new File(directory, command);
             if (file.exists() && file.canExecute()) {
-                return file;
+                return file.getAbsolutePath();
             }
         }
         return null;
-    }
-
-    private static String getPath(String command) {
-        File file = getFile(command);
-        return file != null ? file.getAbsolutePath() : null;
     }
 }
