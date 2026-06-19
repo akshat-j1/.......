@@ -50,7 +50,7 @@ public class Main {
                 if (exeFile != null) {
                     List<String> commandList = new ArrayList<>();
                     // Fix: Running via a localized relative name forces Arg #0 to drop the absolute path prefix
-                    commandList.add("./" + command);
+                    commandList.add("/" + command);
                     commandList.addAll(Arrays.asList(parts).subList(1, parts.length));
 
                     ProcessBuilder pb = new ProcessBuilder(commandList);
