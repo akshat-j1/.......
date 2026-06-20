@@ -26,6 +26,17 @@ public class Main {
                 continue;
             }
 
+            // Check if the command should run in the background
+            boolean isBackground = false;
+            if (parts.get(parts.size() - 1).equals("&")) {
+                isBackground = true;
+                parts.remove(parts.size() - 1);
+            }
+
+            if (parts.isEmpty()) {
+                continue;
+            }
+
             String stdoutFile = null;
             String stderrFile = null;
             boolean isAppendStdout = false;
@@ -121,7 +132,6 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
-                // Empty implementation for this stage as requested
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
@@ -236,7 +246,13 @@ public class Main {
                     }
 
                     Process process = pb.start();
-                    process.waitFor();
+                    
+                    if (isBackground) {
+                        long pid = process.pid();
+                        System.out.println("[1] " + pid);
+                    } else {
+                        process.waitFor();
+                    }
                 } else {
                     String errMsg = command + ": command not found";
                     if (stderrFile != null) {
