@@ -26,7 +26,6 @@ public class Main {
                 continue;
             }
 
-            // Check if the command should run in the background
             boolean isBackground = false;
             if (parts.get(parts.size() - 1).equals("&")) {
                 isBackground = true;
