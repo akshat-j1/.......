@@ -23,27 +23,70 @@ public class Main {
             if (parts.isEmpty()) {
                 continue;
             }
+
+            // Look for redirection operator (> or 1>)
+            String outputFile = null;
+            int redirectIndex = -1;
+            for (int i = 0; i < parts.size(); i++) {
+                String token = parts.get(i);
+                if (token.equals(">") || token.equals("1>")) {
+                    redirectIndex = i;
+                    break;
+                }
+            }
+
+            // Extract execution arguments separate from redirection configuration
+            List<String> execParts;
+            if (redirectIndex != -1 && redirectIndex + 1 < parts.size()) {
+                outputFile = parts.get(redirectIndex + 1);
+                execParts = parts.subList(0, redirectIndex);
+            } else {
+                execParts = parts;
+            }
+
+            if (execParts.isEmpty()) {
+                continue;
+            }
             
-            String command = parts.get(0);
+            String command = execParts.get(0);
 
             if (command.equals("exit")) {
                 System.exit(0);
             } else if (command.equals("echo")) {
                 StringBuilder sb = new StringBuilder();
-                for (int i = 1; i < parts.size(); i++) {
-                    sb.append(parts.get(i));
-                    if (i < parts.size() - 1) {
+                for (int i = 1; i < execParts.size(); i++) {
+                    sb.append(execParts.get(i));
+                    if (i < execParts.size() - 1) {
                         sb.append(" ");
                     }
                 }
-                System.out.println(sb.toString());
+                if (outputFile != null) {
+                    File file = new File(outputFile);
+                    File parent = file.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+                    java.nio.file.Files.writeString(file.toPath(), sb.toString() + "\n");
+                } else {
+                    System.out.println(sb.toString());
+                }
             } else if (command.equals("pwd")) {
-                System.out.println(System.getProperty("user.dir"));
+                String currentDir = System.getProperty("user.dir");
+                if (outputFile != null) {
+                    File file = new File(outputFile);
+                    File parent = file.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+                    java.nio.file.Files.writeString(file.toPath(), currentDir + "\n");
+                } else {
+                    System.out.println(currentDir);
+                }
             } else if (command.equals("cd")) {
-                if (parts.size() < 2) {
+                if (execParts.size() < 2) {
                     continue;
                 }
-                String targetDir = parts.get(1);
+                String targetDir = execParts.get(1);
                 java.nio.file.Path targetPath;
 
                 if (targetDir.equals("~")) {
@@ -59,29 +102,50 @@ public class Main {
                     System.out.println("cd: " + targetDir + ": No such file or directory");
                 }
             } else if (command.equals("type")) {
-                if (parts.size() < 2) {
+                if (execParts.size() < 2) {
                     continue;
                 }
-                String arg = parts.get(1);
+                String arg = execParts.get(1);
+                String resultMessage;
                 if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
-                    System.out.println(arg + " is a shell builtin");
+                    resultMessage = arg + " is a shell builtin";
                 } else {
                     String executablePath = getPath(arg);
                     if (executablePath != null) {
-                        System.out.println(arg + " is " + executablePath);
+                        resultMessage = arg + " is " + executablePath;
                     } else {
-                        System.out.println(arg + ": not found");
+                        resultMessage = arg + ": not found";
                     }
+                }
+
+                if (outputFile != null) {
+                    File file = new File(outputFile);
+                    File parent = file.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+                    java.nio.file.Files.writeString(file.toPath(), resultMessage + "\n");
+                } else {
+                    System.out.println(resultMessage);
                 }
             } else {
                 String executablePath = getPath(command);
                 if (executablePath != null) {
-                    // Fix: Pass the bare unquoted parts natively to ProcessBuilder
-                    ProcessBuilder pb = new ProcessBuilder(parts);
-                    
-                    // Explicitly point execution directory to isolate execution resolution contexts
+                    ProcessBuilder pb = new ProcessBuilder(execParts);
                     pb.directory(new File(System.getProperty("user.dir")));
-                    pb.inheritIO();
+                    
+                    if (outputFile != null) {
+                        File file = new File(outputFile);
+                        File parent = file.getParentFile();
+                        if (parent != null) {
+                            parent.mkdirs();
+                        }
+                        pb.redirectOutput(ProcessBuilder.Redirect.to(file));
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    } else {
+                        pb.inheritIO();
+                    }
+
                     Process process = pb.start();
                     process.waitFor();
                 } else {
