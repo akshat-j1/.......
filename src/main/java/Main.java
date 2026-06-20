@@ -1,4 +1,6 @@
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -26,12 +28,20 @@ public class Main {
 
             String stdoutFile = null;
             String stderrFile = null;
+            boolean isAppend = false;
             int redirectIndex = -1;
 
             for (int i = 0; i < parts.size(); i++) {
                 String token = parts.get(i);
                 if (token.equals(">") || token.equals("1>")) {
                     redirectIndex = i;
+                    if (i + 1 < parts.size()) {
+                        stdoutFile = parts.get(i + 1);
+                    }
+                    break;
+                } else if (token.equals(">>") || token.equals("1>>")) {
+                    redirectIndex = i;
+                    isAppend = true;
                     if (i + 1 < parts.size()) {
                         stdoutFile = parts.get(i + 1);
                     }
@@ -71,7 +81,11 @@ public class Main {
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    java.nio.file.Files.writeString(file.toPath(), sb.toString() + "\n");
+                    if (isAppend) {
+                        Files.writeString(file.toPath(), sb.toString() + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    } else {
+                        Files.writeString(file.toPath(), sb.toString() + "\n");
+                    }
                 } else {
                     System.out.println(sb.toString());
                 }
@@ -85,7 +99,11 @@ public class Main {
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    java.nio.file.Files.writeString(file.toPath(), currentDir + "\n");
+                    if (isAppend) {
+                        Files.writeString(file.toPath(), currentDir + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    } else {
+                        Files.writeString(file.toPath(), currentDir + "\n");
+                    }
                 } else {
                     System.out.println(currentDir);
                 }
@@ -120,7 +138,7 @@ public class Main {
                     if (stderrFile != null) {
                         File file = new File(stderrFile);
                         if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                        java.nio.file.Files.writeString(file.toPath(), errMsg + "\n");
+                        Files.writeString(file.toPath(), errMsg + "\n");
                     } else {
                         System.out.println(errMsg);
                     }
@@ -150,7 +168,11 @@ public class Main {
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    java.nio.file.Files.writeString(file.toPath(), resultMessage + "\n");
+                    if (isAppend) {
+                        Files.writeString(file.toPath(), resultMessage + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    } else {
+                        Files.writeString(file.toPath(), resultMessage + "\n");
+                    }
                 } else {
                     System.out.println(resultMessage);
                 }
@@ -168,7 +190,11 @@ public class Main {
                     if (stdoutFile != null) {
                         File file = new File(stdoutFile);
                         if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                        pb.redirectOutput(ProcessBuilder.Redirect.to(file));
+                        if (isAppend) {
+                            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(file));
+                        } else {
+                            pb.redirectOutput(ProcessBuilder.Redirect.to(file));
+                        }
                     } else {
                         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                     }
@@ -188,7 +214,7 @@ public class Main {
                     if (stderrFile != null) {
                         File file = new File(stderrFile);
                         if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                        java.nio.file.Files.writeString(file.toPath(), errMsg + "\n");
+                        Files.writeString(file.toPath(), errMsg + "\n");
                     } else {
                         System.out.println(errMsg);
                     }
