@@ -120,6 +120,18 @@ public class Main {
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
                     if (!file.exists()) file.createNewFile();
                 }
+            } else if (command.equals("jobs")) {
+                // Empty implementation for this stage as requested
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             } else if (command.equals("cd")) {
                 if (execParts.size() < 2) {
                     continue;
@@ -166,7 +178,7 @@ public class Main {
                 }
                 String arg = execParts.get(1);
                 String resultMessage;
-                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd")) {
+                if (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd") || arg.equals("jobs")) {
                     resultMessage = arg + " is a shell builtin";
                 } else {
                     String executablePath = getPath(arg);
