@@ -6,6 +6,23 @@ import java.util.List;
 import java.util.Scanner;
 
 public class Main {
+    static class Job {
+        int id;
+        long pid;
+        String commandString;
+        String status;
+
+        public Job(int id, long pid, String commandString, String status) {
+            this.id = id;
+            this.pid = pid;
+            this.commandString = commandString;
+            this.status = status;
+        }
+    }
+
+    private static final List<Job> backgroundJobs = new ArrayList<>();
+    private static int nextJobId = 1;
+
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
 
@@ -131,11 +148,24 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
+                StringBuilder jobsOutput = new StringBuilder();
+                for (Job job : backgroundJobs) {
+                    String statusField = String.format("%-24s", job.status);
+                    jobsOutput.append(String.format("[%d]+  %s%s\n", job.id, statusField, job.commandString));
+                }
+
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (!file.exists()) file.createNewFile();
+                    if (isAppendStdout) {
+                        Files.writeString(file.toPath(), jobsOutput.toString(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    } else {
+                        Files.writeString(file.toPath(), jobsOutput.toString());
+                    }
+                } else {
+                    System.out.print(jobsOutput.toString());
                 }
+
                 if (stderrFile != null) {
                     File file = new File(stderrFile);
                     if (file.getParentFile() != null) file.getParentFile().mkdirs();
@@ -248,7 +278,8 @@ public class Main {
                     
                     if (isBackground) {
                         long pid = process.pid();
-                        System.out.println("[1] " + pid);
+                        System.out.println("[" + nextJobId + "] " + pid);
+                        backgroundJobs.add(new Job(nextJobId++, pid, input, "Running"));
                     } else {
                         process.waitFor();
                     }
