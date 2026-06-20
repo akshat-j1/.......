@@ -24,21 +24,29 @@ public class Main {
                 continue;
             }
 
-            // Look for redirection operator (> or 1>)
-            String outputFile = null;
+            String stdoutFile = null;
+            String stderrFile = null;
             int redirectIndex = -1;
+
             for (int i = 0; i < parts.size(); i++) {
                 String token = parts.get(i);
                 if (token.equals(">") || token.equals("1>")) {
                     redirectIndex = i;
+                    if (i + 1 < parts.size()) {
+                        stdoutFile = parts.get(i + 1);
+                    }
+                    break;
+                } else if (token.equals("2>")) {
+                    redirectIndex = i;
+                    if (i + 1 < parts.size()) {
+                        stderrFile = parts.get(i + 1);
+                    }
                     break;
                 }
             }
 
-            // Extract execution arguments separate from redirection configuration
             List<String> execParts;
-            if (redirectIndex != -1 && redirectIndex + 1 < parts.size()) {
-                outputFile = parts.get(redirectIndex + 1);
+            if (redirectIndex != -1) {
                 execParts = parts.subList(0, redirectIndex);
             } else {
                 execParts = parts;
@@ -60,27 +68,31 @@ public class Main {
                         sb.append(" ");
                     }
                 }
-                if (outputFile != null) {
-                    File file = new File(outputFile);
-                    File parent = file.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
                     java.nio.file.Files.writeString(file.toPath(), sb.toString() + "\n");
                 } else {
                     System.out.println(sb.toString());
                 }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             } else if (command.equals("pwd")) {
                 String currentDir = System.getProperty("user.dir");
-                if (outputFile != null) {
-                    File file = new File(outputFile);
-                    File parent = file.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
                     java.nio.file.Files.writeString(file.toPath(), currentDir + "\n");
                 } else {
                     System.out.println(currentDir);
+                }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("cd")) {
                 if (execParts.size() < 2) {
@@ -98,8 +110,25 @@ public class Main {
 
                 if (java.nio.file.Files.exists(targetPath) && java.nio.file.Files.isDirectory(targetPath)) {
                     System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
+                    if (stdoutFile != null) {
+                        File file = new File(stdoutFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        if (!file.exists()) file.createNewFile();
+                    }
                 } else {
-                    System.out.println("cd: " + targetDir + ": No such file or directory");
+                    String errMsg = "cd: " + targetDir + ": No such file or directory";
+                    if (stderrFile != null) {
+                        File file = new File(stderrFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        java.nio.file.Files.writeString(file.toPath(), errMsg + "\n");
+                    } else {
+                        System.out.println(errMsg);
+                    }
+                    if (stdoutFile != null) {
+                        File file = new File(stdoutFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        if (!file.exists()) file.createNewFile();
+                    }
                 }
             } else if (command.equals("type")) {
                 if (execParts.size() < 2) {
@@ -118,15 +147,17 @@ public class Main {
                     }
                 }
 
-                if (outputFile != null) {
-                    File file = new File(outputFile);
-                    File parent = file.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
                     java.nio.file.Files.writeString(file.toPath(), resultMessage + "\n");
                 } else {
                     System.out.println(resultMessage);
+                }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
                 }
             } else {
                 String executablePath = getPath(command);
@@ -134,22 +165,33 @@ public class Main {
                     ProcessBuilder pb = new ProcessBuilder(execParts);
                     pb.directory(new File(System.getProperty("user.dir")));
                     
-                    if (outputFile != null) {
-                        File file = new File(outputFile);
-                        File parent = file.getParentFile();
-                        if (parent != null) {
-                            parent.mkdirs();
-                        }
+                    if (stdoutFile != null) {
+                        File file = new File(stdoutFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
                         pb.redirectOutput(ProcessBuilder.Redirect.to(file));
-                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                     } else {
-                        pb.inheritIO();
+                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    if (stderrFile != null) {
+                        File file = new File(stderrFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        pb.redirectError(ProcessBuilder.Redirect.to(file));
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                     }
 
                     Process process = pb.start();
                     process.waitFor();
                 } else {
-                    System.out.println(command + ": command not found");
+                    String errMsg = command + ": command not found";
+                    if (stderrFile != null) {
+                        File file = new File(stderrFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        java.nio.file.Files.writeString(file.toPath(), errMsg + "\n");
+                    } else {
+                        System.out.println(errMsg);
+                    }
                 }
             }
         }
