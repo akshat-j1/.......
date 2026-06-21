@@ -194,7 +194,6 @@ public class Main {
                     ProcessBuilder pb = new ProcessBuilder(execParts);
                     pb.directory(new File(System.getProperty("user.dir")));
                     
-                    // Fix: Explicitly configure redirection paths for stdout and stderr streams
                     if (stdoutFile != null) {
                         File file = new File(stdoutFile);
                         if (file.getParentFile() != null) file.getParentFile().mkdirs();
@@ -279,17 +278,11 @@ public class Main {
             System.out.println("[" + assignedJobId + "] " + tailProcess.pid());
             backgroundJobs.add(new Job(assignedJobId, tailProcess, originalInput, "Running"));
         } else {
-            for (Process p : builders.stream().map(b -> { try { return pProcess(b); } catch(Exception e) { return null; } }).toArray(Process[]::new)) {
-                // Keep streaming
-            }
+            // Fix: Removed rogue startup stream loop completely to prevent stdout pollution
             for (Process p : processes) {
                 p.waitFor();
             }
         }
-    }
-    
-    private static Process pProcess(ProcessBuilder b) throws Exception {
-        return b.start();
     }
 
     private static void reapBeforePrompt() {
