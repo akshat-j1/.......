@@ -27,6 +27,9 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
+            // Fix: Automatically reap and print completed background tasks before showing the next prompt
+            reapCompletedJobs(null);
+
             System.out.print("$ ");
             
             if (!scanner.hasNextLine()) {
@@ -148,19 +151,12 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
-                for (Job job : backgroundJobs) {
-                    if (job.status.equals("Running") && !job.process.isAlive()) {
-                        job.status = "Done";
-                        if (job.commandString.endsWith(" &")) {
-                            job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
-                        }
-                    }
-                }
-
                 StringBuilder jobsOutput = new StringBuilder();
-                int numJobs = backgroundJobs.size();
-                List<Job> jobsToRemove = new ArrayList<>();
+                
+                // Synchronize and print reaped status changes directly inside the jobs pipeline
+                reapCompletedJobs(jobsOutput);
 
+                int numJobs = backgroundJobs.size();
                 for (int i = 0; i < numJobs; i++) {
                     Job job = backgroundJobs.get(i);
                     char marker = ' ';
@@ -172,13 +168,7 @@ public class Main {
 
                     String statusField = String.format("%-24s", job.status);
                     jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
-
-                    if (job.status.equals("Done")) {
-                        jobsToRemove.add(job);
-                    }
                 }
-
-                backgroundJobs.removeAll(jobsToRemove);
 
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
@@ -325,6 +315,39 @@ public class Main {
                 }
             }
         }
+    }
+
+    private static void reapCompletedJobs(StringBuilder outputBuffer) {
+        List<Job> jobsToRemove = new ArrayList<>();
+        int numJobs = backgroundJobs.size();
+
+        for (int i = 0; i < numJobs; i++) {
+            Job job = backgroundJobs.get(i);
+            if (job.status.equals("Running") && !job.process.isAlive()) {
+                job.status = "Done";
+                if (job.commandString.endsWith(" &")) {
+                    job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
+                }
+
+                char marker = ' ';
+                if (i == numJobs - 1) {
+                    marker = '+';
+                } else if (i == numJobs - 2) {
+                    marker = '-';
+                }
+
+                String statusField = String.format("%-24s", job.status);
+                String formattedLine = String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString);
+
+                if (outputBuffer != null) {
+                    outputBuffer.append(formattedLine);
+                } else {
+                    System.out.print(formattedLine);
+                }
+                jobsToRemove.add(job);
+            }
+        }
+        backgroundJobs.removeAll(jobsToRemove);
     }
 
     private static List<String> parseArguments(String input) {
