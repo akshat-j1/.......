@@ -8,13 +8,13 @@ import java.util.Scanner;
 public class Main {
     static class Job {
         int id;
-        long pid;
+        Process process;
         String commandString;
         String status;
 
-        public Job(int id, long pid, String commandString, String status) {
+        public Job(int id, Process process, String commandString, String status) {
             this.id = id;
-            this.pid = pid;
+            this.process = process;
             this.commandString = commandString;
             this.status = status;
         }
@@ -148,8 +148,19 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
+                // Update statuses based on dynamic child life cycles
+                for (Job job : backgroundJobs) {
+                    if (job.status.equals("Running") && !job.process.isAlive()) {
+                        job.status = "Done";
+                        if (job.commandString.endsWith(" &")) {
+                            job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
+                        }
+                    }
+                }
+
                 StringBuilder jobsOutput = new StringBuilder();
                 int numJobs = backgroundJobs.size();
+                List<Job> jobsToRemove = new ArrayList<>();
 
                 for (int i = 0; i < numJobs; i++) {
                     Job job = backgroundJobs.get(i);
@@ -162,7 +173,14 @@ public class Main {
 
                     String statusField = String.format("%-24s", job.status);
                     jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
+
+                    if (job.status.equals("Done")) {
+                        jobsToRemove.add(job);
+                    }
                 }
+
+                // Reap finalized items from our tracking framework
+                backgroundJobs.removeAll(jobsToRemove);
 
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
@@ -289,7 +307,7 @@ public class Main {
                     if (isBackground) {
                         long pid = process.pid();
                         System.out.println("[" + nextJobId + "] " + pid);
-                        backgroundJobs.add(new Job(nextJobId++, pid, input, "Running"));
+                        backgroundJobs.add(new Job(nextJobId++, process, input, "Running"));
                     } else {
                         process.waitFor();
                     }
