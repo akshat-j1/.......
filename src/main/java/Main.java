@@ -54,7 +54,6 @@ public class Main {
                 continue;
             }
 
-            // Check if this is a pipeline command structure containing '|'
             boolean hasPipe = false;
             int pipeIndex = -1;
             for (int i = 0; i < parts.size(); i++) {
@@ -72,7 +71,6 @@ public class Main {
                 continue;
             }
 
-            // Fallback to normal execution for non-pipeline contexts
             String stdoutFile = null;
             String stderrFile = null;
             boolean isAppendStdout = false;
@@ -123,6 +121,11 @@ public class Main {
                 } else {
                     System.out.println(sb.toString());
                 }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             } else if (command.equals("pwd")) {
                 String currentDir = System.getProperty("user.dir");
                 if (stdoutFile != null) {
@@ -132,6 +135,11 @@ public class Main {
                     else Files.writeString(file.toPath(), currentDir + "\n");
                 } else {
                     System.out.println(currentDir);
+                }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
                 for (Job job : backgroundJobs) {
@@ -161,6 +169,11 @@ public class Main {
                 } else {
                     System.out.print(jobsOutput.toString());
                 }
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             } else if (command.equals("cd")) {
                 if (execParts.size() < 2) continue;
                 String targetDir = execParts.get(1);
@@ -180,10 +193,36 @@ public class Main {
                 if (executablePath != null) {
                     ProcessBuilder pb = new ProcessBuilder(execParts);
                     pb.directory(new File(System.getProperty("user.dir")));
-                    pb.inheritIO();
+                    
+                    // Fix: Explicitly configure redirection paths for stdout and stderr streams
+                    if (stdoutFile != null) {
+                        File file = new File(stdoutFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        if (isAppendStdout) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(file));
+                        else pb.redirectOutput(ProcessBuilder.Redirect.to(file));
+                    } else {
+                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    if (stderrFile != null) {
+                        File file = new File(stderrFile);
+                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                        if (isAppendStderr) pb.redirectError(ProcessBuilder.Redirect.appendTo(file));
+                        else pb.redirectError(ProcessBuilder.Redirect.to(file));
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    }
+
                     Process process = pb.start();
                     if (isBackground) {
-                        int assignedJobId = backgroundJobs.isEmpty() ? 1 : backgroundJobs.stream().mapToInt(j -> j.id).max().getAsInt() + 1;
+                        int assignedJobId = 1;
+                        if (!backgroundJobs.isEmpty()) {
+                            int maxId = 0;
+                            for (Job job : backgroundJobs) {
+                                if (job.id > maxId) maxId = job.id;
+                            }
+                            assignedJobId = maxId + 1;
+                        }
                         System.out.println("[" + assignedJobId + "] " + process.pid());
                         backgroundJobs.add(new Job(assignedJobId, process, input, "Running"));
                     } else {
@@ -218,7 +257,6 @@ public class Main {
         ProcessBuilder pbRight = new ProcessBuilder(rightParts);
         pbRight.directory(new File(System.getProperty("user.dir")));
 
-        // Configure standard stream ends for pipeline isolation chains
         pbLeft.redirectInput(ProcessBuilder.Redirect.INHERIT);
         pbLeft.redirectError(ProcessBuilder.Redirect.INHERIT);
         pbRight.redirectOutput(ProcessBuilder.Redirect.INHERIT);
@@ -227,7 +265,6 @@ public class Main {
         List<ProcessBuilder> builders = List.of(pbLeft, pbRight);
         List<Process> processes = ProcessBuilder.startPipeline(builders);
 
-        // The overall pipeline state is managed tracking the terminal execution end
         Process tailProcess = processes.get(processes.size() - 1);
 
         if (isBackground) {
@@ -242,10 +279,17 @@ public class Main {
             System.out.println("[" + assignedJobId + "] " + tailProcess.pid());
             backgroundJobs.add(new Job(assignedJobId, tailProcess, originalInput, "Running"));
         } else {
+            for (Process p : builders.stream().map(b -> { try { return pProcess(b); } catch(Exception e) { return null; } }).toArray(Process[]::new)) {
+                // Keep streaming
+            }
             for (Process p : processes) {
                 p.waitFor();
             }
         }
+    }
+    
+    private static Process pProcess(ProcessBuilder b) throws Exception {
+        return b.start();
     }
 
     private static void reapBeforePrompt() {
