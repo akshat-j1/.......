@@ -21,7 +21,6 @@ public class Main {
     }
 
     private static final List<Job> backgroundJobs = new ArrayList<>();
-    private static int nextJobId = 1;
 
     public static void main(String[] args) throws Exception {
         Scanner scanner = new Scanner(System.in);
@@ -150,7 +149,6 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
-                // 1. Update all statuses first
                 for (Job job : backgroundJobs) {
                     if (job.status.equals("Running") && !job.process.isAlive()) {
                         job.status = "Done";
@@ -160,7 +158,6 @@ public class Main {
                     }
                 }
 
-                // 2. Print all jobs in exact sequential order
                 StringBuilder jobsOutput = new StringBuilder();
                 int numJobs = backgroundJobs.size();
                 List<Job> jobsToRemove = new ArrayList<>();
@@ -182,7 +179,6 @@ public class Main {
                     }
                 }
 
-                // 3. Clean up reaped jobs after sequential display output is formed
                 backgroundJobs.removeAll(jobsToRemove);
 
                 if (stdoutFile != null) {
@@ -308,9 +304,21 @@ public class Main {
                     Process process = pb.start();
                     
                     if (isBackground) {
+                        // Fix: Dynamically compute index configurations instead of an absolute global tracker
+                        int assignedJobId = 1;
+                        if (!backgroundJobs.isEmpty()) {
+                            int maxId = 0;
+                            for (Job job : backgroundJobs) {
+                                if (job.id > maxId) {
+                                    maxId = job.id;
+                                }
+                            }
+                            assignedJobId = maxId + 1;
+                        }
+
                         long pid = process.pid();
-                        System.out.println("[" + nextJobId + "] " + pid);
-                        backgroundJobs.add(new Job(nextJobId++, process, input, "Running"));
+                        System.out.println("[" + assignedJobId + "] " + pid);
+                        backgroundJobs.add(new Job(assignedJobId, process, input, "Running"));
                     } else {
                         process.waitFor();
                     }
