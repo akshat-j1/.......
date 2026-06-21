@@ -149,9 +149,19 @@ public class Main {
                 }
             } else if (command.equals("jobs")) {
                 StringBuilder jobsOutput = new StringBuilder();
-                for (Job job : backgroundJobs) {
+                int numJobs = backgroundJobs.size();
+
+                for (int i = 0; i < numJobs; i++) {
+                    Job job = backgroundJobs.get(i);
+                    char marker = ' ';
+                    if (i == numJobs - 1) {
+                        marker = '+';
+                    } else if (i == numJobs - 2) {
+                        marker = '-';
+                    }
+
                     String statusField = String.format("%-24s", job.status);
-                    jobsOutput.append(String.format("[%d]+  %s%s\n", job.id, statusField, job.commandString));
+                    jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
                 }
 
                 if (stdoutFile != null) {
