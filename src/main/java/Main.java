@@ -58,7 +58,7 @@ public class Main {
                 continue;
             }
 
-            // Parse out all multi-stage pipeline segments separated by '|'
+            // Parse out all pipeline segments separated by '|'
             List<List<String>> pipelineStages = new ArrayList<>();
             List<String> currentStage = new ArrayList<>();
             for (String token : parts) {
@@ -75,9 +75,8 @@ public class Main {
                 pipelineStages.add(currentStage);
             }
 
-            // If multiple pipeline segments exist, pass them into the chained execution engine
             if (pipelineStages.size() > 1) {
-                handleMultiStagePipeline(pipelineStages);
+                handlePipelineRouting(pipelineStages, isBackground, input);
                 continue;
             }
 
@@ -307,24 +306,72 @@ public class Main {
         }
     }
 
-    // Fix: Connect an arbitrary N-number of sequential pipeline components seamlessly
-    private static void handleMultiStagePipeline(List<List<String>> stages) throws Exception {
-        InputStream currentIn = System.in;
-
-        for (int i = 0; i < stages.size(); i++) {
-            List<String> stageParts = stages.get(i);
-            boolean isLastStage = (i == stages.size() - 1);
-
-            ByteArrayOutputStream stageOutBuffer = new ByteArrayOutputStream();
-            PrintStream stagePrintStream = isLastStage ? System.out : new PrintStream(stageOutBuffer);
-
-            executeSingleCommand(stageParts, null, null, false, false, false, "", currentIn, stagePrintStream, System.err);
-            stagePrintStream.flush();
-
-            if (!isLastStage) {
-                currentIn = new ByteArrayInputStream(stageOutBuffer.toByteArray());
+    private static void handlePipelineRouting(List<List<String>> stages, boolean isBackground, String originalInput) throws Exception {
+        boolean containsBuiltin = false;
+        for (List<String> stage : stages) {
+            if (isBuiltin(stage.get(0))) {
+                containsBuiltin = true;
+                break;
             }
         }
+
+        // Strategy A: Contains a shell builtin -> Use the in-memory streaming bridge
+        if (containsBuiltin) {
+            InputStream currentIn = System.in;
+            for (int i = 0; i < stages.size(); i++) {
+                List<String> stageParts = stages.get(i);
+                boolean isLastStage = (i == stages.size() - 1);
+
+                ByteArrayOutputStream stageOutBuffer = new ByteArrayOutputStream();
+                PrintStream stagePrintStream = isLastStage ? System.out : new PrintStream(stageOutBuffer);
+
+                executeSingleCommand(stageParts, null, null, false, false, false, "", currentIn, stagePrintStream, System.err);
+                stagePrintStream.flush();
+
+                if (!isLastStage) {
+                    currentIn = new ByteArrayInputStream(stageOutBuffer.toByteArray());
+                }
+            }
+            return;
+        }
+
+        // Strategy B: Pure external binaries -> Delegate asynchronously to native OS pipeline execution
+        List<ProcessBuilder> builders = new ArrayList<>();
+        for (int i = 0; i < stages.size(); i++) {
+            List<String> stageParts = stages.get(i);
+            String cmd = stageParts.get(0);
+            String fullPath = getPath(cmd);
+
+            if (fullPath == null) {
+                System.out.println(cmd + ": command not found");
+                return;
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(stageParts).directory(new File(System.getProperty("user.dir")));
+            
+            if (i == 0) pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            if (i == stages.size() - 1) pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+
+            builders.add(pb);
+        }
+
+        List<Process> processes = ProcessBuilder.startPipeline(builders);
+        Process tailProcess = processes.get(processes.size() - 1);
+
+        if (isBackground) {
+            int assignedJobId = backgroundJobs.isEmpty() ? 1 : backgroundJobs.stream().mapToInt(j -> j.id).max().getAsInt() + 1;
+            System.out.println("[" + assignedJobId + "] " + tailProcess.pid());
+            backgroundJobs.add(new Job(assignedJobId, tailProcess, originalInput, "Running"));
+        } else {
+            for (Process p : processes) {
+                p.waitFor();
+            }
+        }
+    }
+
+    private static boolean isBuiltin(String cmd) {
+        return cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs");
     }
 
     private static void reapBeforePrompt() {
