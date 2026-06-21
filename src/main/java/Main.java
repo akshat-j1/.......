@@ -27,8 +27,7 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
 
         while (true) {
-            // Fix: Automatically reap and print completed background tasks before showing the next prompt
-            reapCompletedJobs(null);
+            reapBeforePrompt();
 
             System.out.print("$ ");
             
@@ -151,12 +150,21 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
-                StringBuilder jobsOutput = new StringBuilder();
-                
-                // Synchronize and print reaped status changes directly inside the jobs pipeline
-                reapCompletedJobs(jobsOutput);
+                // 1. Update all statuses first
+                for (Job job : backgroundJobs) {
+                    if (job.status.equals("Running") && !job.process.isAlive()) {
+                        job.status = "Done";
+                        if (job.commandString.endsWith(" &")) {
+                            job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
+                        }
+                    }
+                }
 
+                // 2. Print all jobs in exact sequential order
+                StringBuilder jobsOutput = new StringBuilder();
                 int numJobs = backgroundJobs.size();
+                List<Job> jobsToRemove = new ArrayList<>();
+
                 for (int i = 0; i < numJobs; i++) {
                     Job job = backgroundJobs.get(i);
                     char marker = ' ';
@@ -168,7 +176,14 @@ public class Main {
 
                     String statusField = String.format("%-24s", job.status);
                     jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
+
+                    if (job.status.equals("Done")) {
+                        jobsToRemove.add(job);
+                    }
                 }
+
+                // 3. Clean up reaped jobs after sequential display output is formed
+                backgroundJobs.removeAll(jobsToRemove);
 
                 if (stdoutFile != null) {
                     File file = new File(stdoutFile);
@@ -317,9 +332,9 @@ public class Main {
         }
     }
 
-    private static void reapCompletedJobs(StringBuilder outputBuffer) {
-        List<Job> jobsToRemove = new ArrayList<>();
+    private static void reapBeforePrompt() {
         int numJobs = backgroundJobs.size();
+        List<Job> jobsToRemove = new ArrayList<>();
 
         for (int i = 0; i < numJobs; i++) {
             Job job = backgroundJobs.get(i);
@@ -337,13 +352,7 @@ public class Main {
                 }
 
                 String statusField = String.format("%-24s", job.status);
-                String formattedLine = String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString);
-
-                if (outputBuffer != null) {
-                    outputBuffer.append(formattedLine);
-                } else {
-                    System.out.print(formattedLine);
-                }
+                System.out.printf("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString);
                 jobsToRemove.add(job);
             }
         }
