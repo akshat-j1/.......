@@ -58,20 +58,26 @@ public class Main {
                 continue;
             }
 
-            boolean hasPipe = false;
-            int pipeIndex = -1;
-            for (int i = 0; i < parts.size(); i++) {
-                if (parts.get(i).equals("|")) {
-                    hasPipe = true;
-                    pipeIndex = i;
-                    break;
+            // Parse out all multi-stage pipeline segments separated by '|'
+            List<List<String>> pipelineStages = new ArrayList<>();
+            List<String> currentStage = new ArrayList<>();
+            for (String token : parts) {
+                if (token.equals("|")) {
+                    if (!currentStage.isEmpty()) {
+                        pipelineStages.add(new ArrayList<>(currentStage));
+                        currentStage.clear();
+                    }
+                } else {
+                    currentStage.add(token);
                 }
             }
+            if (!currentStage.isEmpty()) {
+                pipelineStages.add(currentStage);
+            }
 
-            if (hasPipe) {
-                List<String> leftParts = parts.subList(0, pipeIndex);
-                List<String> rightParts = parts.subList(pipeIndex + 1, parts.size());
-                handlePipeline(leftParts, rightParts);
+            // If multiple pipeline segments exist, pass them into the chained execution engine
+            if (pipelineStages.size() > 1) {
+                handleMultiStagePipeline(pipelineStages);
                 continue;
             }
 
@@ -130,7 +136,6 @@ public class Main {
             } else {
                 outStream.println(sb.toString());
             }
-            // Fix: Explicitly initialize requested stderr redirections for builtin context
             if (stderrFile != null) {
                 File file = new File(stderrFile);
                 if (file.getParentFile() != null) file.getParentFile().mkdirs();
@@ -302,53 +307,24 @@ public class Main {
         }
     }
 
-    private static void handlePipeline(List<String> leftParts, List<String> rightParts) throws Exception {
-        String leftCmd = leftParts.get(0);
-        String rightCmd = rightParts.get(0);
+    // Fix: Connect an arbitrary N-number of sequential pipeline components seamlessly
+    private static void handleMultiStagePipeline(List<List<String>> stages) throws Exception {
+        InputStream currentIn = System.in;
 
-        boolean leftBuiltin = isBuiltin(leftCmd);
-        boolean rightBuiltin = isBuiltin(rightCmd);
+        for (int i = 0; i < stages.size(); i++) {
+            List<String> stageParts = stages.get(i);
+            boolean isLastStage = (i == stages.size() - 1);
 
-        if (!leftBuiltin && !rightBuiltin) {
-            String leftPath = getPath(leftCmd);
-            String rightPath = getPath(rightCmd);
+            ByteArrayOutputStream stageOutBuffer = new ByteArrayOutputStream();
+            PrintStream stagePrintStream = isLastStage ? System.out : new PrintStream(stageOutBuffer);
 
-            if (leftPath == null) {
-                System.out.println(leftCmd + ": command not found");
-                return;
+            executeSingleCommand(stageParts, null, null, false, false, false, "", currentIn, stagePrintStream, System.err);
+            stagePrintStream.flush();
+
+            if (!isLastStage) {
+                currentIn = new ByteArrayInputStream(stageOutBuffer.toByteArray());
             }
-            if (rightPath == null) {
-                System.out.println(rightCmd + ": command not found");
-                return;
-            }
-
-            ProcessBuilder pbLeft = new ProcessBuilder(leftParts).directory(new File(System.getProperty("user.dir")));
-            ProcessBuilder pbRight = new ProcessBuilder(rightParts).directory(new File(System.getProperty("user.dir")));
-
-            pbLeft.redirectInput(ProcessBuilder.Redirect.INHERIT);
-            pbLeft.redirectError(ProcessBuilder.Redirect.INHERIT);
-            pbRight.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-            pbRight.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-            List<Process> processes = ProcessBuilder.startPipeline(List.of(pbLeft, pbRight));
-            for (Process p : processes) {
-                p.waitFor();
-            }
-            return;
         }
-
-        ByteArrayOutputStream leftOutBuffer = new ByteArrayOutputStream();
-        PrintStream leftPrintStream = new PrintStream(leftOutBuffer);
-
-        executeSingleCommand(leftParts, null, null, false, false, false, "", System.in, leftPrintStream, System.err);
-        leftPrintStream.flush();
-
-        ByteArrayInputStream intermediateInStream = new ByteArrayInputStream(leftOutBuffer.toByteArray());
-        executeSingleCommand(rightParts, null, null, false, false, false, "", intermediateInStream, System.out, System.err);
-    }
-
-    private static boolean isBuiltin(String cmd) {
-        return cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs");
     }
 
     private static void reapBeforePrompt() {
