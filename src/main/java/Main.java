@@ -148,7 +148,6 @@ public class Main {
                     if (!file.exists()) file.createNewFile();
                 }
             } else if (command.equals("jobs")) {
-                // Update statuses based on dynamic child life cycles
                 for (Job job : backgroundJobs) {
                     if (job.status.equals("Running") && !job.process.isAlive()) {
                         job.status = "Done";
@@ -179,7 +178,6 @@ public class Main {
                     }
                 }
 
-                // Reap finalized items from our tracking framework
                 backgroundJobs.removeAll(jobsToRemove);
 
                 if (stdoutFile != null) {
