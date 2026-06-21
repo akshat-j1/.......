@@ -1,4 +1,8 @@
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -67,7 +71,7 @@ public class Main {
             if (hasPipe) {
                 List<String> leftParts = parts.subList(0, pipeIndex);
                 List<String> rightParts = parts.subList(pipeIndex + 1, parts.size());
-                handlePipeline(leftParts, rightParts, isBackground, input);
+                handlePipeline(leftParts, rightParts);
                 continue;
             }
 
@@ -103,186 +107,195 @@ public class Main {
             List<String> execParts = (redirectIndex != -1) ? parts.subList(0, redirectIndex) : parts;
             if (execParts.isEmpty()) continue;
             
-            String command = execParts.get(0);
+            executeSingleCommand(execParts, stdoutFile, stderrFile, isAppendStdout, isAppendStderr, isBackground, input, System.in, System.out, System.err);
+        }
+    }
 
-            if (command.equals("exit")) {
-                System.exit(0);
-            } else if (command.equals("echo")) {
-                StringBuilder sb = new StringBuilder();
-                for (int i = 1; i < execParts.size(); i++) {
-                    sb.append(execParts.get(i));
-                    if (i < execParts.size() - 1) sb.append(" ");
-                }
-                if (stdoutFile != null) {
-                    File file = new File(stdoutFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (isAppendStdout) Files.writeString(file.toPath(), sb.toString() + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                    else Files.writeString(file.toPath(), sb.toString() + "\n");
-                } else {
-                    System.out.println(sb.toString());
-                }
-                if (stderrFile != null) {
-                    File file = new File(stderrFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (!file.exists()) file.createNewFile();
-                }
-            } else if (command.equals("pwd")) {
-                String currentDir = System.getProperty("user.dir");
-                if (stdoutFile != null) {
-                    File file = new File(stdoutFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (isAppendStdout) Files.writeString(file.toPath(), currentDir + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                    else Files.writeString(file.toPath(), currentDir + "\n");
-                } else {
-                    System.out.println(currentDir);
-                }
-                if (stderrFile != null) {
-                    File file = new File(stderrFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (!file.exists()) file.createNewFile();
-                }
-            } else if (command.equals("jobs")) {
-                for (Job job : backgroundJobs) {
-                    if (job.status.equals("Running") && !job.process.isAlive()) {
-                        job.status = "Done";
-                        if (job.commandString.endsWith(" &")) job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
-                    }
-                }
-                StringBuilder jobsOutput = new StringBuilder();
-                int numJobs = backgroundJobs.size();
-                List<Job> jobsToRemove = new ArrayList<>();
-                for (int i = 0; i < numJobs; i++) {
-                    Job job = backgroundJobs.get(i);
-                    char marker = ' ';
-                    if (i == numJobs - 1) marker = '+';
-                    else if (i == numJobs - 2) marker = '-';
-                    String statusField = String.format("%-24s", job.status);
-                    jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
-                    if (job.status.equals("Done")) jobsToRemove.add(job);
-                }
-                backgroundJobs.removeAll(jobsToRemove);
-                if (stdoutFile != null) {
-                    File file = new File(stdoutFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (isAppendStdout) Files.writeString(file.toPath(), jobsOutput.toString(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                    else Files.writeString(file.toPath(), jobsOutput.toString());
-                } else {
-                    System.out.print(jobsOutput.toString());
-                }
-                if (stderrFile != null) {
-                    File file = new File(stderrFile);
-                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                    if (!file.exists()) file.createNewFile();
-                }
-            } else if (command.equals("cd")) {
-                if (execParts.size() < 2) continue;
-                String targetDir = execParts.get(1);
-                java.nio.file.Path targetPath = targetDir.equals("~") ? java.nio.file.Paths.get(System.getenv("HOME")) : java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(targetDir).normalize();
-                if (java.nio.file.Files.exists(targetPath) && java.nio.file.Files.isDirectory(targetPath)) {
-                    System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
-                } else {
-                    System.out.println("cd: " + targetDir + ": No such file or directory");
-                }
-            } else if (command.equals("type")) {
-                if (execParts.size() < 2) continue;
-                String arg = execParts.get(1);
-                String resultMessage = (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd") || arg.equals("jobs")) ? arg + " is a shell builtin" : ((getPath(arg) != null) ? arg + " is " + getPath(arg) : arg + ": not found");
-                System.out.println(resultMessage);
+    private static void executeSingleCommand(List<String> execParts, String stdoutFile, String stderrFile, boolean isAppendStdout, boolean isAppendStderr, boolean isBackground, String originalInput, InputStream inStream, PrintStream outStream, PrintStream errStream) throws Exception {
+        String command = execParts.get(0);
+
+        if (command.equals("exit")) {
+            System.exit(0);
+        } else if (command.equals("echo")) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 1; i < execParts.size(); i++) {
+                sb.append(execParts.get(i));
+                if (i < execParts.size() - 1) sb.append(" ");
+            }
+            if (stdoutFile != null) {
+                File file = new File(stdoutFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (isAppendStdout) Files.writeString(file.toPath(), sb.toString() + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                else Files.writeString(file.toPath(), sb.toString() + "\n");
             } else {
-                String executablePath = getPath(command);
-                if (executablePath != null) {
-                    ProcessBuilder pb = new ProcessBuilder(execParts);
-                    pb.directory(new File(System.getProperty("user.dir")));
-                    
-                    if (stdoutFile != null) {
-                        File file = new File(stdoutFile);
-                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                        if (isAppendStdout) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(file));
-                        else pb.redirectOutput(ProcessBuilder.Redirect.to(file));
-                    } else {
-                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                    }
-
-                    if (stderrFile != null) {
-                        File file = new File(stderrFile);
-                        if (file.getParentFile() != null) file.getParentFile().mkdirs();
-                        if (isAppendStderr) pb.redirectError(ProcessBuilder.Redirect.appendTo(file));
-                        else pb.redirectError(ProcessBuilder.Redirect.to(file));
-                    } else {
-                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-                    }
-
-                    Process process = pb.start();
-                    if (isBackground) {
-                        int assignedJobId = 1;
-                        if (!backgroundJobs.isEmpty()) {
-                            int maxId = 0;
-                            for (Job job : backgroundJobs) {
-                                if (job.id > maxId) maxId = job.id;
-                            }
-                            assignedJobId = maxId + 1;
-                        }
-                        System.out.println("[" + assignedJobId + "] " + process.pid());
-                        backgroundJobs.add(new Job(assignedJobId, process, input, "Running"));
-                    } else {
-                        process.waitFor();
-                    }
-                } else {
-                    System.out.println(command + ": command not found");
+                outStream.println(sb.toString());
+            }
+        } else if (command.equals("pwd")) {
+            String currentDir = System.getProperty("user.dir");
+            if (stdoutFile != null) {
+                File file = new File(stdoutFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (isAppendStdout) Files.writeString(file.toPath(), currentDir + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                else Files.writeString(file.toPath(), currentDir + "\n");
+            } else {
+                outStream.println(currentDir);
+            }
+        } else if (command.equals("jobs")) {
+            for (Job job : backgroundJobs) {
+                if (job.status.equals("Running") && !job.process.isAlive()) {
+                    job.status = "Done";
+                    if (job.commandString.endsWith(" &")) job.commandString = job.commandString.substring(0, job.commandString.length() - 2);
                 }
+            }
+            StringBuilder jobsOutput = new StringBuilder();
+            int numJobs = backgroundJobs.size();
+            List<Job> jobsToRemove = new ArrayList<>();
+            for (int i = 0; i < numJobs; i++) {
+                Job job = backgroundJobs.get(i);
+                char marker = ' ';
+                if (i == numJobs - 1) marker = '+';
+                else if (i == numJobs - 2) marker = '-';
+                String statusField = String.format("%-24s", job.status);
+                jobsOutput.append(String.format("[%d]%c  %s%s\n", job.id, marker, statusField, job.commandString));
+                if (job.status.equals("Done")) jobsToRemove.add(job);
+            }
+            backgroundJobs.removeAll(jobsToRemove);
+            if (stdoutFile != null) {
+                File file = new File(stdoutFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (isAppendStdout) Files.writeString(file.toPath(), jobsOutput.toString(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                else Files.writeString(file.toPath(), jobsOutput.toString());
+            } else {
+                outStream.print(jobsOutput.toString());
+            }
+        } else if (command.equals("cd")) {
+            if (execParts.size() < 2) return;
+            String targetDir = execParts.get(1);
+            java.nio.file.Path targetPath = targetDir.equals("~") ? java.nio.file.Paths.get(System.getenv("HOME")) : java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(targetDir).normalize();
+            if (java.nio.file.Files.exists(targetPath) && java.nio.file.Files.isDirectory(targetPath)) {
+                System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
+            } else {
+                outStream.println("cd: " + targetDir + ": No such file or directory");
+            }
+        } else if (command.equals("type")) {
+            if (execParts.size() < 2) return;
+            String arg = execParts.get(1);
+            String resultMessage = (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd") || arg.equals("jobs")) ? arg + " is a shell builtin" : ((getPath(arg) != null) ? arg + " is " + getPath(arg) : arg + ": not found");
+            outStream.println(resultMessage);
+        } else {
+            String executablePath = getPath(command);
+            if (executablePath != null) {
+                ProcessBuilder pb = new ProcessBuilder(execParts);
+                pb.directory(new File(System.getProperty("user.dir")));
+                
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (isAppendStdout) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(file));
+                    else pb.redirectOutput(ProcessBuilder.Redirect.to(file));
+                } else if (outStream != System.out) {
+                    pb.redirectOutput(ProcessBuilder.Redirect.PIPE);
+                } else {
+                    pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                }
+
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (isAppendStderr) pb.redirectError(ProcessBuilder.Redirect.appendTo(file));
+                    else pb.redirectError(ProcessBuilder.Redirect.to(file));
+                } else {
+                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                }
+
+                if (inStream != System.in) {
+                    pb.redirectInput(ProcessBuilder.Redirect.PIPE);
+                } else {
+                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+                }
+
+                Process process = pb.start();
+
+                if (inStream != System.in) {
+                    try (var os = process.getOutputStream()) {
+                        inStream.transferTo(os);
+                    }
+                }
+
+                if (isBackground) {
+                    int assignedJobId = 1;
+                    if (!backgroundJobs.isEmpty()) {
+                        int maxId = 0;
+                        for (Job job : backgroundJobs) {
+                            if (job.id > maxId) maxId = job.id;
+                        }
+                        assignedJobId = maxId + 1;
+                    }
+                    outStream.println("[" + assignedJobId + "] " + process.pid());
+                    backgroundJobs.add(new Job(assignedJobId, process, originalInput, "Running"));
+                } else {
+                    if (outStream != System.out) {
+                        try (var is = process.getInputStream()) {
+                            is.transferTo(outStream);
+                        }
+                    }
+                    process.waitFor();
+                }
+            } else {
+                outStream.println(command + ": command not found");
             }
         }
     }
 
-    private static void handlePipeline(List<String> leftParts, List<String> rightParts, boolean isBackground, String originalInput) throws Exception {
+    private static void handlePipeline(List<String> leftParts, List<String> rightParts) throws Exception {
         String leftCmd = leftParts.get(0);
         String rightCmd = rightParts.get(0);
 
-        String leftPath = getPath(leftCmd);
-        String rightPath = getPath(rightCmd);
+        boolean leftBuiltin = isBuiltin(leftCmd);
+        boolean rightBuiltin = isBuiltin(rightCmd);
 
-        if (leftPath == null) {
-            System.out.println(leftCmd + ": command not found");
-            return;
-        }
-        if (rightPath == null) {
-            System.out.println(rightCmd + ": command not found");
-            return;
-        }
+        // Scenario 1: Both sides are native external binaries
+        if (!leftBuiltin && !rightBuiltin) {
+            String leftPath = getPath(leftCmd);
+            String rightPath = getPath(rightCmd);
 
-        ProcessBuilder pbLeft = new ProcessBuilder(leftParts);
-        pbLeft.directory(new File(System.getProperty("user.dir")));
-
-        ProcessBuilder pbRight = new ProcessBuilder(rightParts);
-        pbRight.directory(new File(System.getProperty("user.dir")));
-
-        pbLeft.redirectInput(ProcessBuilder.Redirect.INHERIT);
-        pbLeft.redirectError(ProcessBuilder.Redirect.INHERIT);
-        pbRight.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        pbRight.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-        List<ProcessBuilder> builders = List.of(pbLeft, pbRight);
-        List<Process> processes = ProcessBuilder.startPipeline(builders);
-
-        Process tailProcess = processes.get(processes.size() - 1);
-
-        if (isBackground) {
-            int assignedJobId = 1;
-            if (!backgroundJobs.isEmpty()) {
-                int maxId = 0;
-                for (Job job : backgroundJobs) {
-                    if (job.id > maxId) maxId = job.id;
-                }
-                assignedJobId = maxId + 1;
+            if (leftPath == null) {
+                System.out.println(leftCmd + ": command not found");
+                return;
             }
-            System.out.println("[" + assignedJobId + "] " + tailProcess.pid());
-            backgroundJobs.add(new Job(assignedJobId, tailProcess, originalInput, "Running"));
-        } else {
-            // Fix: Removed rogue startup stream loop completely to prevent stdout pollution
+            if (rightPath == null) {
+                System.out.println(rightCmd + ": command not found");
+                return;
+            }
+
+            ProcessBuilder pbLeft = new ProcessBuilder(leftParts).directory(new File(System.getProperty("user.dir")));
+            ProcessBuilder pbRight = new ProcessBuilder(rightParts).directory(new File(System.getProperty("user.dir")));
+
+            pbLeft.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            pbLeft.redirectError(ProcessBuilder.Redirect.INHERIT);
+            pbRight.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            pbRight.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+            List<Process> processes = ProcessBuilder.startPipeline(List.of(pbLeft, pbRight));
             for (Process p : processes) {
                 p.waitFor();
             }
+            return;
         }
+
+        // Scenario 2: Built-in handling using an in-memory stream pipeline bridge
+        ByteArrayOutputStream leftOutBuffer = new ByteArrayOutputStream();
+        PrintStream leftPrintStream = new PrintStream(leftOutBuffer);
+
+        executeSingleCommand(leftParts, null, null, false, false, false, "", System.in, leftPrintStream, System.err);
+        leftPrintStream.flush();
+
+        ByteArrayInputStream intermediateInStream = new ByteArrayInputStream(leftOutBuffer.toByteArray());
+        executeSingleCommand(rightParts, null, null, false, false, false, "", intermediateInStream, System.out, System.err);
+    }
+
+    private static boolean isBuiltin(String cmd) {
+        return cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type") || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs");
     }
 
     private static void reapBeforePrompt() {
