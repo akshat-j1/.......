@@ -130,6 +130,12 @@ public class Main {
             } else {
                 outStream.println(sb.toString());
             }
+            // Fix: Explicitly initialize requested stderr redirections for builtin context
+            if (stderrFile != null) {
+                File file = new File(stderrFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (!file.exists()) file.createNewFile();
+            }
         } else if (command.equals("pwd")) {
             String currentDir = System.getProperty("user.dir");
             if (stdoutFile != null) {
@@ -139,6 +145,11 @@ public class Main {
                 else Files.writeString(file.toPath(), currentDir + "\n");
             } else {
                 outStream.println(currentDir);
+            }
+            if (stderrFile != null) {
+                File file = new File(stderrFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (!file.exists()) file.createNewFile();
             }
         } else if (command.equals("jobs")) {
             for (Job job : backgroundJobs) {
@@ -168,20 +179,56 @@ public class Main {
             } else {
                 outStream.print(jobsOutput.toString());
             }
+            if (stderrFile != null) {
+                File file = new File(stderrFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (!file.exists()) file.createNewFile();
+            }
         } else if (command.equals("cd")) {
             if (execParts.size() < 2) return;
             String targetDir = execParts.get(1);
             java.nio.file.Path targetPath = targetDir.equals("~") ? java.nio.file.Paths.get(System.getenv("HOME")) : java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(targetDir).normalize();
             if (java.nio.file.Files.exists(targetPath) && java.nio.file.Files.isDirectory(targetPath)) {
                 System.setProperty("user.dir", targetPath.toAbsolutePath().toString());
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             } else {
-                outStream.println("cd: " + targetDir + ": No such file or directory");
+                String errMsg = "cd: " + targetDir + ": No such file or directory";
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (isAppendStderr) Files.writeString(file.toPath(), errMsg + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    else Files.writeString(file.toPath(), errMsg + "\n");
+                } else {
+                    outStream.println(errMsg);
+                }
+                if (stdoutFile != null) {
+                    File file = new File(stdoutFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (!file.exists()) file.createNewFile();
+                }
             }
         } else if (command.equals("type")) {
             if (execParts.size() < 2) return;
             String arg = execParts.get(1);
             String resultMessage = (arg.equals("echo") || arg.equals("exit") || arg.equals("type") || arg.equals("pwd") || arg.equals("cd") || arg.equals("jobs")) ? arg + " is a shell builtin" : ((getPath(arg) != null) ? arg + " is " + getPath(arg) : arg + ": not found");
-            outStream.println(resultMessage);
+            
+            if (stdoutFile != null) {
+                File file = new File(stdoutFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (isAppendStdout) Files.writeString(file.toPath(), resultMessage + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                else Files.writeString(file.toPath(), resultMessage + "\n");
+            } else {
+                outStream.println(resultMessage);
+            }
+            if (stderrFile != null) {
+                File file = new File(stderrFile);
+                if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                if (!file.exists()) file.createNewFile();
+            }
         } else {
             String executablePath = getPath(command);
             if (executablePath != null) {
@@ -242,7 +289,15 @@ public class Main {
                     process.waitFor();
                 }
             } else {
-                outStream.println(command + ": command not found");
+                String errMsg = command + ": command not found";
+                if (stderrFile != null) {
+                    File file = new File(stderrFile);
+                    if (file.getParentFile() != null) file.getParentFile().mkdirs();
+                    if (isAppendStderr) Files.writeString(file.toPath(), errMsg + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    else Files.writeString(file.toPath(), errMsg + "\n");
+                } else {
+                    outStream.println(errMsg);
+                }
             }
         }
     }
@@ -254,7 +309,6 @@ public class Main {
         boolean leftBuiltin = isBuiltin(leftCmd);
         boolean rightBuiltin = isBuiltin(rightCmd);
 
-        // Scenario 1: Both sides are native external binaries
         if (!leftBuiltin && !rightBuiltin) {
             String leftPath = getPath(leftCmd);
             String rightPath = getPath(rightCmd);
@@ -283,7 +337,6 @@ public class Main {
             return;
         }
 
-        // Scenario 2: Built-in handling using an in-memory stream pipeline bridge
         ByteArrayOutputStream leftOutBuffer = new ByteArrayOutputStream();
         PrintStream leftPrintStream = new PrintStream(leftOutBuffer);
 
